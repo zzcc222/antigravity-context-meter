@@ -614,15 +614,7 @@
 
   // 动态获取当前选中的对话/项目 Conversation ID
   function getActiveConversationId() {
-    // 1. 侧边栏当前高亮/选中的对话条目
-    const activeRow = document.querySelector('[data-cascade-id][data-selected="true"]') ||
-                      document.querySelector('[data-testid^="conversation-row-"][data-selected="true"]');
-    if (activeRow) {
-      const cid = activeRow.getAttribute('data-cascade-id');
-      if (cid && cid !== '_new') return cid;
-    }
-
-    // 2. 从 URL 路径、Hash 或 search 获取
+    // 1. 从 URL 路径、Hash 或 search 获取当前明确打开的会话 UUID
     const pathAndHash = (window.location.pathname || '') + (window.location.hash || '');
     const urlMatch = pathAndHash.match(/\/c\/([0-9a-fA-F-]{36})/);
     if (urlMatch && urlMatch[1]) return urlMatch[1];
@@ -630,12 +622,22 @@
     const paramMatch = (window.location.search || '').match(/[?&]cascadeId=([0-9a-fA-F-]{36})/);
     if (paramMatch && paramMatch[1]) return paramMatch[1];
 
+    // 2. 侧边栏当前选中的对话条目
+    const activeRow = document.querySelector('[data-cascade-id][data-selected="true"]') ||
+                      document.querySelector('[data-testid^="conversation-row-"][data-selected="true"]');
+    if (activeRow) {
+      const cid = activeRow.getAttribute('data-cascade-id');
+      if (cid && cid !== '_new' && /^[0-9a-fA-F-]{36}$/.test(cid)) return cid;
+      if (cid === '_new') return null; // 明确为新建对话
+    }
+
     // 3. 备选：查找带 secondary 高亮类名的行
     const rows = document.querySelectorAll('[data-cascade-id]');
     for (const r of rows) {
       if (r.getAttribute('data-selected') === 'true' || r.classList.contains('bg-secondary')) {
         const cid = r.getAttribute('data-cascade-id');
-        if (cid && cid !== '_new') return cid;
+        if (cid && cid !== '_new' && /^[0-9a-fA-F-]{36}$/.test(cid)) return cid;
+        if (cid === '_new') return null;
       }
     }
 
@@ -778,35 +780,58 @@
 
     // 嗅探当前选中的会话 ID
     const activeConvoId = getActiveConversationId();
-    if (activeConvoId && activeConvoId !== currentConvoId) {
-      currentConvoId = activeConvoId;
-    }
+    currentConvoId = activeConvoId;
 
     let stats = null;
 
-    // 1. 本地微服务极速读取，传入当前会话 ID
-    try {
-      const url = currentConvoId 
-        ? 'http://127.0.0.1:49152/stats?convoId=' + encodeURIComponent(currentConvoId)
-        : 'http://127.0.0.1:49152/stats';
-      const res = await fetch(url);
-      if (res.ok) {
-        stats = await res.json();
-      }
-    } catch (e) {}
-
-    // 2. 备选：Electron 主进程 IPC 读取
-    if (!stats || !stats.totalTokens) {
+    if (!currentConvoId || currentConvoId === '_new') {
+      // 当前是新建对话或尚未打开具体项目会话，严格置为 0%
+      stats = {
+        convoId: null,
+        totalTokens: 0,
+        toolOutputTokens: 0,
+        modelOutputTokens: 0,
+        modelThinkingTokens: 0,
+        userTokens: 0,
+        systemPromptTokens: 0,
+        artifactsTokens: 0,
+        stepCount: 0
+      };
+    } else {
+      // 1. 本地微服务极速读取，传入当前会话 ID
       try {
-        stats = await electron_1.ipcRenderer.invoke('context:get-stats', currentConvoId);
+        const url = 'http://127.0.0.1:49152/stats?convoId=' + encodeURIComponent(currentConvoId);
+        const res = await fetch(url);
+        if (res.ok) {
+          stats = await res.json();
+        }
       } catch (e) {}
+
+      // 2. 备选：Electron 主进程 IPC 读取
+      if (!stats) {
+        try {
+          stats = await electron_1.ipcRenderer.invoke('context:get-stats', currentConvoId);
+        } catch (e) {}
+      }
     }
 
-    if (!stats || !stats.totalTokens) return;
+    if (!stats) {
+      stats = {
+        convoId: currentConvoId,
+        totalTokens: 0,
+        toolOutputTokens: 0,
+        modelOutputTokens: 0,
+        modelThinkingTokens: 0,
+        userTokens: 0,
+        systemPromptTokens: 0,
+        artifactsTokens: 0
+      };
+    }
 
+    const totalTokens = stats.totalTokens || 0;
     const modelName = detectActiveModel();
     const maxLimit = getModelContextLimit(modelName);
-    const pct = Math.min(100, (stats.totalTokens / maxLimit) * 100);
+    const pct = (totalTokens && maxLimit) ? Math.min(100, (totalTokens / maxLimit) * 100) : 0;
 
     const pctEl = rootEl.querySelector('#agy-pct-val');
     const usedEl = rootEl.querySelector('#agy-used-val');
@@ -815,7 +840,7 @@
     const modelBadge = rootEl.querySelector('#agy-model-badge');
 
     if (pctEl) pctEl.innerText = pct.toFixed(1) + '%';
-    if (usedEl) usedEl.innerText = formatTokens(stats.totalTokens);
+    if (usedEl) usedEl.innerText = formatTokens(totalTokens);
     if (maxEl) maxEl.innerText = '/ ' + formatTokens(maxLimit);
     if (modelBadge) modelBadge.innerText = modelName;
 
@@ -828,10 +853,16 @@
       }
     }
 
-    const total = Math.max(1, stats.totalTokens);
+    const total = Math.max(1, totalTokens);
     const setWidth = (id, tokens) => {
       const el = rootEl.querySelector(id);
-      if (el) el.style.width = ((tokens / total) * 100).toFixed(1) + '%';
+      if (el) {
+        if (totalTokens === 0) {
+          el.style.width = '0%';
+        } else {
+          el.style.width = (((tokens || 0) / total) * 100).toFixed(1) + '%';
+        }
+      }
     };
 
     setWidth('#agy-seg-tools', stats.toolOutputTokens || 0);
@@ -848,44 +879,50 @@
 
     const setMiniBar = (id, tokens) => {
       const el = rootEl.querySelector(id);
-      if (el) el.style.width = Math.min(100, ((tokens || 0) / total) * 100).toFixed(1) + '%';
+      if (el) {
+        if (totalTokens === 0) {
+          el.style.width = '0%';
+        } else {
+          el.style.width = Math.min(100, (((tokens || 0) / total) * 100)).toFixed(1) + '%';
+        }
+      }
     };
 
     setText('#agy-pop-model-badge', modelName);
 
     setText('#pop-tools-tok', (stats.toolOutputTokens || 0).toLocaleString());
-    setText('#pop-tools-pct', (((stats.toolOutputTokens || 0) / total) * 100).toFixed(1) + '%');
+    setText('#pop-tools-pct', totalTokens === 0 ? '0%' : (((stats.toolOutputTokens || 0) / total) * 100).toFixed(1) + '%');
     setMiniBar('#pop-tools-bar', stats.toolOutputTokens);
 
     setText('#pop-model-tok', (stats.modelOutputTokens || 0).toLocaleString());
-    setText('#pop-model-pct', (((stats.modelOutputTokens || 0) / total) * 100).toFixed(1) + '%');
+    setText('#pop-model-pct', totalTokens === 0 ? '0%' : (((stats.modelOutputTokens || 0) / total) * 100).toFixed(1) + '%');
     setMiniBar('#pop-model-bar', stats.modelOutputTokens);
 
     setText('#pop-think-tok', (stats.modelThinkingTokens || 0).toLocaleString());
-    setText('#pop-think-pct', (((stats.modelThinkingTokens || 0) / total) * 100).toFixed(1) + '%');
+    setText('#pop-think-pct', totalTokens === 0 ? '0%' : (((stats.modelThinkingTokens || 0) / total) * 100).toFixed(1) + '%');
     setMiniBar('#pop-think-bar', stats.modelThinkingTokens);
 
     setText('#pop-user-tok', (stats.userTokens || 0).toLocaleString());
-    setText('#pop-user-pct', (((stats.userTokens || 0) / total) * 100).toFixed(1) + '%');
+    setText('#pop-user-pct', totalTokens === 0 ? '0%' : (((stats.userTokens || 0) / total) * 100).toFixed(1) + '%');
     setMiniBar('#pop-user-bar', stats.userTokens);
 
     setText('#pop-sys-tok', (stats.systemPromptTokens || 0).toLocaleString());
-    setText('#pop-sys-pct', (((stats.systemPromptTokens || 0) / total) * 100).toFixed(1) + '%');
+    setText('#pop-sys-pct', totalTokens === 0 ? '0%' : (((stats.systemPromptTokens || 0) / total) * 100).toFixed(1) + '%');
     setMiniBar('#pop-sys-bar', stats.systemPromptTokens);
 
     setText('#pop-art-tok', (stats.artifactsTokens || 0).toLocaleString());
-    setText('#pop-art-pct', (((stats.artifactsTokens || 0) / total) * 100).toFixed(1) + '%');
+    setText('#pop-art-pct', totalTokens === 0 ? '0%' : (((stats.artifactsTokens || 0) / total) * 100).toFixed(1) + '%');
     setMiniBar('#pop-art-bar', stats.artifactsTokens);
 
     const healthBadge = rootEl.querySelector('#agy-health-badge');
     if (healthBadge) {
       if (pct < 30) {
-        healthBadge.innerText = '🟢 空间极其充裕 (' + formatTokens(maxLimit - stats.totalTokens) + ' 可用)';
+        healthBadge.innerText = '🟢 空间极其充裕 (' + formatTokens(maxLimit - totalTokens) + ' 可用)';
         healthBadge.style.color = '#34d399';
         healthBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
         healthBadge.style.background = 'rgba(16, 185, 129, 0.15)';
       } else if (pct < 70) {
-        healthBadge.innerText = '🟡 容量正常适中 (' + formatTokens(maxLimit - stats.totalTokens) + ' 可用)';
+        healthBadge.innerText = '🟡 容量正常适中 (' + formatTokens(maxLimit - totalTokens) + ' 可用)';
         healthBadge.style.color = '#fbbf24';
         healthBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
         healthBadge.style.background = 'rgba(245, 158, 11, 0.15)';
@@ -937,7 +974,7 @@
       const observer = new MutationObserver(() => {
         positionWidget();
         const newCid = getActiveConversationId();
-        if (newCid && newCid !== currentConvoId) {
+        if (newCid !== currentConvoId) {
           updateStats();
         }
       });

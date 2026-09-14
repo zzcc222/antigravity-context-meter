@@ -79,9 +79,21 @@ let cachedMtime = 0;
 let cachedConvoId = null;
 
 function getConversationStats(targetConvoId) {
-  const convoId = targetConvoId || getActiveConversationId();
-  if (!convoId) return null;
+  if (!targetConvoId || targetConvoId === '_new') {
+    return {
+      convoId: null,
+      userTokens: 0,
+      modelThinkingTokens: 0,
+      modelOutputTokens: 0,
+      toolOutputTokens: 0,
+      systemPromptTokens: 0,
+      artifactsTokens: 0,
+      totalTokens: 0,
+      stepCount: 0
+    };
+  }
 
+  const convoId = targetConvoId;
   const brainDir = path.join(os.homedir(), '.gemini', 'antigravity', 'brain');
   const logFile = path.join(brainDir, convoId, '.system_generated', 'logs', 'transcript_full.jsonl');
   const fallbackLog = path.join(brainDir, convoId, '.system_generated', 'logs', 'transcript.jsonl');
@@ -94,9 +106,9 @@ function getConversationStats(targetConvoId) {
       modelThinkingTokens: 0,
       modelOutputTokens: 0,
       toolOutputTokens: 0,
-      systemPromptTokens: 3500,
+      systemPromptTokens: 0,
       artifactsTokens: 0,
-      totalTokens: 3500,
+      totalTokens: 0,
       stepCount: 0
     };
   }
