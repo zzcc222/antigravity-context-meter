@@ -3,6 +3,8 @@
 > 专为 Google Antigravity 设计的高颜值、极客风「对话框顶部上下文流光容量条」独立插件包。  
 > 遇到电脑重装系统、更新 Antigravity 或更换设备时，**双击一键即可秒级恢复安装**！
 
+![Antigravity Context Meter 实时效果预览](assets/preview.png)
+
 ---
 
 ## 📸 功能特性
