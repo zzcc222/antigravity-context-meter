@@ -38,7 +38,7 @@
 
 ### 第一步：运行一键安装
 在当前插件目录下，**直接双击运行 `install.bat`**  
-*(或在 PowerShell 中执行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1`)*
+*(或在 PowerShell 中执行 `.\install.ps1`)*
 
 脚本将全自动完成：
 1. 自动探测 Antigravity 路径；
@@ -69,11 +69,9 @@ antigravity-context-meter/
 ├── plugin.json               # 官方插件配置清单 (支持 Antigravity 插件识别)
 ├── README.md                 # 本说明文档
 ├── install.bat               # Windows 一键自动安装脚本 (双击即装)
-├── install.ps1               # PowerShell 核心安装引擎 (支持免 Node 环境回退)
-├── install.js                # Node.js 极速安装核心
+├── install.ps1               # PowerShell 核心安装引擎
 ├── uninstall.bat             # 一键干净卸载恢复脚本 (双击即卸)
 ├── uninstall.ps1             # PowerShell 卸载还原引擎
-├── uninstall.js              # Node.js 干净卸载核心
 ├── core/
 │   ├── contextBarEngine.js   # 渲染层顶部长条 UI 与流光样式引擎
 │   ├── contextStats.js       # 上下文 Token 解析与精确统计核心
@@ -82,3 +80,12 @@ antigravity-context-meter/
     └── context-meter/
         └── SKILL.md          # 技能描述文件，供智能体自主识别与维护
 ```
+
+---
+
+## 💡 常见问题与技巧
+
+* **Q: 为什么我按了 Ctrl+R 没看到长条？**  
+  A: 检查 Antigravity 是否完全启动，并确认是否处于具体项目对话页面中（在空白启动页或设置页中会长条会自动隐藏）。
+* **Q: 之后 Antigravity 更新了怎么办？**  
+  A: 如果官方更新覆盖了核心文件，只需再次双击 `install.bat` 重新安装即可，1 秒完成！
