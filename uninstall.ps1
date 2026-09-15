@@ -72,10 +72,18 @@ if (-not $appDir) {
     Write-Host "[3/3] 已清理核心统计组件" -ForegroundColor Green
 }
 
-# 终止后台微服务
+# 先杀死旧服务进程避免占用 (支持 node.exe 及免 Node 模式下的 Antigravity.exe)
 try {
-    Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object {
-        $_.CommandLine -match "contextServer"
+    $portPids = Get-NetTCPConnection -LocalPort 49152 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+    foreach ($p in $portPids) {
+        if ($p -and $p -gt 0) {
+            Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
+        }
+    }
+} catch {}
+try {
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.CommandLine -and $_.CommandLine -match "contextServer"
     } | ForEach-Object {
         Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     }

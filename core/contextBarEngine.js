@@ -291,9 +291,17 @@
         flex-direction: column;
         gap: 12px;
         color: #f1f5f9;
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
         z-index: 1000000;
         animation: agyFadeUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         cursor: default;
+      }
+
+      /* 窄屏自适应响应式 */
+      @media (max-width: 480px) {
+        .agy-model-badge { display: none !important; }
+        .agy-top-bar { gap: 8px !important; padding: 0 8px !important; }
       }
 
       .agy-pop-header {
@@ -644,17 +652,26 @@
     return null;
   }
 
+  let cachedModelName = 'Gemini 3.8 Flash';
+  let lastModelCheck = 0;
+
   function detectActiveModel() {
-    const candidates = document.querySelectorAll('button, span, div');
+    const now = Date.now();
+    if (now - lastModelCheck < 3000 && cachedModelName) {
+      return cachedModelName;
+    }
+    lastModelCheck = now;
+
+    // 优先从页面按钮或角色按钮中查找模型名称，避免扫描全量 DOM (div/span) 触发重排 Layout Thrashing
+    const candidates = document.querySelectorAll('button, [role="button"]');
     for (const el of candidates) {
-      if (el.children.length === 0 || el.tagName === 'BUTTON') {
-        const text = (el.innerText || el.textContent || '').trim();
-        if ((text.includes('Gemini') || text.includes('Claude') || text.includes('GPT')) && text.length < 35) {
-          return text;
-        }
+      const text = (el.textContent || '').trim();
+      if ((text.includes('Gemini') || text.includes('Claude') || text.includes('GPT')) && text.length < 35) {
+        cachedModelName = text;
+        return text;
       }
     }
-    return 'Gemini 3.8 Flash';
+    return cachedModelName || 'Gemini 3.8 Flash';
   }
 
   // 精确侦测 @ 引用菜单与 / 斜杠命令（工具调用）菜单是否处于展开状态
@@ -667,7 +684,9 @@
       '.typeahead-popover',
       '[role="listbox"][aria-label="Mentions"]',
       '[role="listbox"][aria-label*="Typeahead"]',
-      '[role="listbox"][aria-label*="Slash"]'
+      '[role="listbox"][aria-label*="Slash"]',
+      '[data-testid="project-selector-search"]',
+      '[data-testid="project-selector-item"]'
     ];
     for (const sel of selectors) {
       const el = document.querySelector(sel);
@@ -691,6 +710,15 @@
     if (controlledInput) {
       const target = document.getElementById('typeahead-menu');
       if (target && target.isConnected) return target;
+    }
+
+    // 4. 检查展开状态的项目/工作区选择下拉弹出层
+    const openPoppers = document.querySelectorAll('[data-radix-popper-content-wrapper], [role="menu"]');
+    for (const popper of openPoppers) {
+      if (popper.isConnected && (popper.querySelector('[data-testid*="project"]') || popper.querySelector('[data-project-name]'))) {
+        const r = popper.getBoundingClientRect();
+        if (r.height > 0 && r.width > 0) return popper;
+      }
     }
 
     return null;
@@ -761,9 +789,23 @@
     rootEl.style.removeProperty('pointer-events');
 
     // 顶部横条状对齐对话框
+    // 关键优化：防遮挡新建对话时左上角出现的“项目选择”栏（project-selector）
+    let effectiveTop = rect.top;
+    const parentContainer = inputBox.closest('[data-testid="agent-input-box"]') || inputBox.parentElement;
+    if (parentContainer) {
+      for (const child of parentContainer.children) {
+        if (child !== inputBox && child.offsetParent !== null) {
+          const cRect = child.getBoundingClientRect();
+          if (cRect.height > 0 && cRect.top > 0 && cRect.top < effectiveTop) {
+            effectiveTop = cRect.top;
+          }
+        }
+      }
+    }
+
     const targetLeft = rect.left;
     const targetWidth = rect.width;
-    const targetBottom = window.innerHeight - rect.top + 6;
+    const targetBottom = window.innerHeight - effectiveTop + 6;
 
     rootEl.style.position = 'fixed';
     rootEl.style.left = Math.round(targetLeft) + 'px';
@@ -801,7 +843,7 @@
       // 1. 本地微服务极速读取，传入当前会话 ID
       try {
         const url = 'http://127.0.0.1:49152/stats?convoId=' + encodeURIComponent(currentConvoId);
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: AbortSignal.timeout(600) });
         if (res.ok) {
           stats = await res.json();
         }

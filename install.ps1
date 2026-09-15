@@ -98,10 +98,18 @@ if (Test-Path $ipcPath) {
 
 # 5. 启动后台常驻微服务
 Write-Host "[5/5] 启动本地极速统计微服务 (127.0.0.1:49152)..." -ForegroundColor White
-# 先杀死旧服务进程避免占用
+# 先杀死旧服务进程避免占用 (支持 node.exe 及免 Node 模式下的 Antigravity.exe)
 try {
-    Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object {
-        $_.CommandLine -match "contextServer"
+    $portPids = Get-NetTCPConnection -LocalPort 49152 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+    foreach ($p in $portPids) {
+        if ($p -and $p -gt 0) {
+            Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
+        }
+    }
+} catch {}
+try {
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.CommandLine -and $_.CommandLine -match "contextServer"
     } | ForEach-Object {
         Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     }
@@ -122,8 +130,8 @@ Start-Sleep -Milliseconds 800
 # 校验服务是否正常响应
 $testSuccess = $false
 try {
-    $response = Invoke-RestMethod -Uri "http://127.0.0.1:49152/stats" -TimeoutSec 3 -ErrorAction SilentlyContinue
-    if ($response -and $response.totalTokens -ge 0) {
+    $response = Invoke-RestMethod -Uri "http://127.0.0.1:49152/ping" -TimeoutSec 3 -ErrorAction SilentlyContinue
+    if ($response -and $response.status -eq "ok") {
         $testSuccess = $true
     }
 } catch {}
