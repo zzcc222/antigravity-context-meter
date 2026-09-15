@@ -14,6 +14,39 @@
     return 1048576;
   }
 
+  
+  const isZh = (() => {
+    try {
+      if (typeof navigator !== 'undefined') {
+        const l = (navigator.language || navigator.userLanguage || '').toLowerCase();
+        if (l.startsWith('zh')) return true;
+      }
+      if (document.documentElement && document.documentElement.lang && document.documentElement.lang.startsWith('zh')) return true;
+      if (document.querySelector('[aria-label="设置"]') || (document.title && /[\u4e00-\u9fa5]/.test(document.title))) return true;
+    } catch (e) {}
+    return false;
+  })();
+
+  const i18n = {
+    topBarTitle: isZh ? '点击展开/固定上下文占用详情' : 'Click to inspect/pin context usage details',
+    trackTitle: isZh ? '上下文实时各模块占用分布' : 'Real-time context breakdown by category',
+    detailBtn: isZh ? '📊 详情' : '📊 Details',
+    refreshTitle: isZh ? '立即重新统计' : 'Refresh stats now',
+    popTitle: isZh ? '⚡ 上下文容量透视' : '⚡ Context Capacity Inspector',
+    popCloseTitle: isZh ? '关闭详情' : 'Close details',
+    toolsLabel: isZh ? '🛠️ 工具调用与终端输出' : '🛠️ Tool Calls & Output',
+    modelLabel: isZh ? '🤖 智能体回复与方案' : '🤖 Agent Responses',
+    thinkLabel: isZh ? '🧠 深度思考推理' : '🧠 Deep Thinking',
+    userLabel: isZh ? '👤 用户指令与提问' : '👤 User Prompts',
+    sysLabel: isZh ? '⚙️ 系统预设与规则' : '⚙️ System Rules',
+    artLabel: isZh ? '📄 工件与关联文档' : '📄 Artifacts & Docs',
+    pinBtn: isZh ? '📌 点击锁定' : '📌 Pin Card',
+    pinnedBtn: isZh ? '📌 已锁定 (点击解锁)' : '📌 Pinned (Click to unpin)',
+    healthGood: (avail) => isZh ? ('🟢 空间极其充裕 (' + avail + ' 可用)') : ('🟢 Abundant Space (' + avail + ' avail)'),
+    healthMed: (avail) => isZh ? ('🟡 容量正常适中 (' + avail + ' 可用)') : ('🟡 Moderate Usage (' + avail + ' avail)'),
+    healthWarn: isZh ? '🔴 接近上限建议开启新会话' : '🔴 Near Limit, Consider New Chat'
+  };
+
   function formatTokens(count) {
     if (!count) return '0';
     if (count >= 1000000) return (count / 1000000).toFixed(2) + 'M';
@@ -452,14 +485,14 @@
       rootEl = document.createElement('div');
       rootEl.id = 'agy-context-root';
       rootEl.innerHTML = `
-        <div class="agy-top-bar" id="agy-top-bar" title="点击展开/固定上下文占用详情">
+        <div class="agy-top-bar" id="agy-top-bar" title="${i18n.topBarTitle}">
           <div class="agy-bar-left">
             <span class="agy-dot" id="agy-status-dot"></span>
             <span class="agy-badge-text">Context</span>
             <span class="agy-pct" id="agy-pct-val">0.0%</span>
           </div>
 
-          <div class="agy-progress-track" id="agy-progress-track" title="上下文实时各模块占用分布">
+          <div class="agy-progress-track" id="agy-progress-track" title="${i18n.trackTitle}">
             <div class="agy-progress-segment agy-seg-tools" id="agy-seg-tools" style="width: 0%" title="工具调用与输出"></div>
             <div class="agy-progress-segment agy-seg-model" id="agy-seg-model" style="width: 0%" title="智能体回复"></div>
             <div class="agy-progress-segment agy-seg-think" id="agy-seg-think" style="width: 0%" title="深度思考"></div>
@@ -475,8 +508,8 @@
               <span class="agy-max-val" id="agy-max-val">/ 1.0M</span>
             </div>
             <span class="agy-model-badge" id="agy-model-badge">Gemini 3.8 Flash</span>
-            <span class="agy-btn-detail" id="agy-btn-detail">📊 详情</span>
-            <button class="agy-refresh-btn" id="agy-refresh-btn" title="立即重新统计">
+            <span class="agy-btn-detail" id="agy-btn-detail">${i18n.detailBtn}</span>
+            <button class="agy-refresh-btn" id="agy-refresh-btn" title="${i18n.refreshTitle}">
               <span class="agy-refresh-icon" id="agy-refresh-icon">🔄</span>
             </button>
           </div>
@@ -485,18 +518,18 @@
         <div id="agy-context-popover">
           <div class="agy-pop-header">
             <div class="agy-pop-title">
-              <span>⚡ 上下文容量透视</span>
+              <span>${i18n.popTitle}</span>
             </div>
             <div class="agy-pop-actions">
               <span class="agy-pop-model" id="agy-pop-model-badge">Gemini 3.8 Flash</span>
-              <button class="agy-pop-close" id="agy-pop-close" title="关闭详情">✕</button>
+              <button class="agy-pop-close" id="agy-pop-close" title="${i18n.popCloseTitle}">✕</button>
             </div>
           </div>
 
           <div class="agy-pop-stats-grid">
             <div class="agy-stat-row">
               <div class="agy-stat-meta">
-                <span class="agy-stat-label"><span class="agy-stat-color" style="background:#38bdf8;"></span>🛠️ 工具调用与终端输出</span>
+                <span class="agy-stat-label"><span class="agy-stat-color" style="background:#38bdf8;"></span>${i18n.toolsLabel}</span>
                 <span class="agy-stat-val"><span class="agy-stat-tokens" id="pop-tools-tok">0</span><span class="agy-stat-pct" id="pop-tools-pct">0%</span></span>
               </div>
               <div class="agy-stat-mini-bar"><div class="agy-stat-mini-fill" id="pop-tools-bar" style="background:#38bdf8; width:0%;"></div></div>
@@ -504,7 +537,7 @@
 
             <div class="agy-stat-row">
               <div class="agy-stat-meta">
-                <span class="agy-stat-label"><span class="agy-stat-color" style="background:#a855f7;"></span>🤖 智能体回复与方案</span>
+                <span class="agy-stat-label"><span class="agy-stat-color" style="background:#a855f7;"></span>${i18n.modelLabel}</span>
                 <span class="agy-stat-val"><span class="agy-stat-tokens" id="pop-model-tok">0</span><span class="agy-stat-pct" id="pop-model-pct">0%</span></span>
               </div>
               <div class="agy-stat-mini-bar"><div class="agy-stat-mini-fill" id="pop-model-bar" style="background:#a855f7; width:0%;"></div></div>
@@ -512,7 +545,7 @@
 
             <div class="agy-stat-row">
               <div class="agy-stat-meta">
-                <span class="agy-stat-label"><span class="agy-stat-color" style="background:#ec4899;"></span>🧠 深度思考推理</span>
+                <span class="agy-stat-label"><span class="agy-stat-color" style="background:#ec4899;"></span>${i18n.thinkLabel}</span>
                 <span class="agy-stat-val"><span class="agy-stat-tokens" id="pop-think-tok">0</span><span class="agy-stat-pct" id="pop-think-pct">0%</span></span>
               </div>
               <div class="agy-stat-mini-bar"><div class="agy-stat-mini-fill" id="pop-think-bar" style="background:#ec4899; width:0%;"></div></div>
@@ -520,7 +553,7 @@
 
             <div class="agy-stat-row">
               <div class="agy-stat-meta">
-                <span class="agy-stat-label"><span class="agy-stat-color" style="background:#10b981;"></span>👤 用户指令与提问</span>
+                <span class="agy-stat-label"><span class="agy-stat-color" style="background:#10b981;"></span>${i18n.userLabel}</span>
                 <span class="agy-stat-val"><span class="agy-stat-tokens" id="pop-user-tok">0</span><span class="agy-stat-pct" id="pop-user-pct">0%</span></span>
               </div>
               <div class="agy-stat-mini-bar"><div class="agy-stat-mini-fill" id="pop-user-bar" style="background:#10b981; width:0%;"></div></div>
@@ -528,7 +561,7 @@
 
             <div class="agy-stat-row">
               <div class="agy-stat-meta">
-                <span class="agy-stat-label"><span class="agy-stat-color" style="background:#f59e0b;"></span>⚙️ 系统预设与规则</span>
+                <span class="agy-stat-label"><span class="agy-stat-color" style="background:#f59e0b;"></span>${i18n.sysLabel}</span>
                 <span class="agy-stat-val"><span class="agy-stat-tokens" id="pop-sys-tok">0</span><span class="agy-stat-pct" id="pop-sys-pct">0%</span></span>
               </div>
               <div class="agy-stat-mini-bar"><div class="agy-stat-mini-fill" id="pop-sys-bar" style="background:#f59e0b; width:0%;"></div></div>
@@ -536,7 +569,7 @@
 
             <div class="agy-stat-row">
               <div class="agy-stat-meta">
-                <span class="agy-stat-label"><span class="agy-stat-color" style="background:#eab308;"></span>📄 工件与关联文档</span>
+                <span class="agy-stat-label"><span class="agy-stat-color" style="background:#eab308;"></span>${i18n.artLabel}</span>
                 <span class="agy-stat-val"><span class="agy-stat-tokens" id="pop-art-tok">0</span><span class="agy-stat-pct" id="pop-art-pct">0%</span></span>
               </div>
               <div class="agy-stat-mini-bar"><div class="agy-stat-mini-fill" id="pop-art-bar" style="background:#eab308; width:0%;"></div></div>
@@ -544,8 +577,8 @@
           </div>
 
           <div class="agy-pop-footer">
-            <span class="agy-health-pill" id="agy-health-badge">🟢 空间极其充裕</span>
-            <span class="agy-pin-indicator" id="agy-pin-btn">📌 点击锁定</span>
+            <span class="agy-health-pill" id="agy-health-badge">${i18n.healthGood('1.05M')}</span>
+            <span class="agy-pin-indicator" id="agy-pin-btn">${i18n.pinBtn}</span>
           </div>
         </div>
       `;
@@ -580,10 +613,10 @@
         popoverPinned = !popoverPinned;
         if (popoverPinned) {
           showPopover();
-          if (pinBtn) pinBtn.innerText = '📌 已锁定 (点击解锁)';
+          if (pinBtn) pinBtn.innerText = i18n.pinnedBtn;
         } else {
           hidePopover();
-          if (pinBtn) pinBtn.innerText = '📌 点击锁定';
+          if (pinBtn) pinBtn.innerText = i18n.pinBtn;
         }
       };
 
@@ -595,7 +628,7 @@
         popoverPinned = false;
         popover.style.display = 'none';
         rootEl.style.zIndex = '30';
-        if (pinBtn) pinBtn.innerText = '📌 点击锁定';
+        if (pinBtn) pinBtn.innerText = i18n.pinBtn;
       });
 
       document.addEventListener('click', (e) => {
@@ -603,7 +636,7 @@
           popoverPinned = false;
           popover.style.display = 'none';
           rootEl.style.zIndex = '30';
-          if (pinBtn) pinBtn.innerText = '📌 点击锁定';
+          if (pinBtn) pinBtn.innerText = i18n.pinBtn;
         }
       });
 
@@ -731,7 +764,7 @@
     const isSettings = (window.location.pathname && window.location.pathname.includes('settings')) || 
                        (window.location.hash && window.location.hash.includes('settings')) || 
                        document.querySelector('[data-testid="settings-page"]') || 
-                       document.querySelector('[aria-label="Settings"]');
+                       document.querySelector('[aria-label="Settings"]') || document.querySelector('[aria-label="设置"]');
 
     // 寻找主对话输入框
     const inputBox = document.getElementById('antigravity.agentSidePanelInputBox') || 
@@ -959,17 +992,17 @@
     const healthBadge = rootEl.querySelector('#agy-health-badge');
     if (healthBadge) {
       if (pct < 30) {
-        healthBadge.innerText = '🟢 空间极其充裕 (' + formatTokens(maxLimit - totalTokens) + ' 可用)';
+        healthBadge.innerText = i18n.healthGood(formatTokens(maxLimit - totalTokens));
         healthBadge.style.color = '#34d399';
         healthBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
         healthBadge.style.background = 'rgba(16, 185, 129, 0.15)';
       } else if (pct < 70) {
-        healthBadge.innerText = '🟡 容量正常适中 (' + formatTokens(maxLimit - totalTokens) + ' 可用)';
+        healthBadge.innerText = i18n.healthMed(formatTokens(maxLimit - totalTokens));
         healthBadge.style.color = '#fbbf24';
         healthBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
         healthBadge.style.background = 'rgba(245, 158, 11, 0.15)';
       } else {
-        healthBadge.innerText = '🔴 接近上限建议开启新会话';
+        healthBadge.innerText = i18n.healthWarn;
         healthBadge.style.color = '#f87171';
         healthBadge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
         healthBadge.style.background = 'rgba(239, 68, 68, 0.15)';
