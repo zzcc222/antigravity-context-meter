@@ -707,9 +707,36 @@
     return cachedModelName || 'Gemini 3.8 Flash';
   }
 
-  // 精确侦测 @ 引用菜单与 / 斜杠命令（工具调用）菜单是否处于展开状态
+  // 精确侦测 @ 引用菜单与 / 斜杠命令（工具调用）菜单以及项目选择下拉菜单是否处于展开状态
   function getTypeaheadOrMentionMenu() {
-    // 1. 明确的 mention / slash 命令容器 (Lexical 渲染的列表)
+    // 1. 直接侦测新建对话专属项目/工作区选择器触发按钮是否处于展开状态
+    const projectTrigger = document.querySelector('[data-testid="project-selector-trigger"]') ||
+                           document.querySelector('[aria-label^="Select project"]') ||
+                           document.querySelector('[aria-label^="Select workspace"]');
+    if (projectTrigger && projectTrigger.offsetParent !== null) {
+      if (projectTrigger.getAttribute('aria-expanded') === 'true' || 
+          projectTrigger.getAttribute('data-state') === 'open') {
+        return projectTrigger;
+      }
+    }
+
+    // 2. 项目选择弹窗专属内容元素
+    const projectMenuSelectors = [
+      '[data-testid="project-selector-search"]',
+      '[data-testid="project-selector-item"]',
+      '[data-project-name]',
+      '[data-pseudo-project]'
+    ];
+    for (const sel of projectMenuSelectors) {
+      const el = document.querySelector(sel);
+      if (el && el.isConnected) {
+        const p = el.closest('[data-radix-popper-content-wrapper], [role="menu"], [role="listbox"], [data-state="open"]') || el;
+        const r = p.getBoundingClientRect();
+        if (r.height > 0 && r.width > 0) return p;
+      }
+    }
+
+    // 3. 明确的 mention / slash 命令容器 (Lexical 渲染的列表)
     const selectors = [
       '[data-mention-menu]',
       '#typeahead-menu',
@@ -717,9 +744,7 @@
       '.typeahead-popover',
       '[role="listbox"][aria-label="Mentions"]',
       '[role="listbox"][aria-label*="Typeahead"]',
-      '[role="listbox"][aria-label*="Slash"]',
-      '[data-testid="project-selector-search"]',
-      '[data-testid="project-selector-item"]'
+      '[role="listbox"][aria-label*="Slash"]'
     ];
     for (const sel of selectors) {
       const el = document.querySelector(sel);
@@ -731,26 +756,43 @@
       }
     }
 
-    // 2. 检查是否有处于高亮或展开状态的 typeahead 选项
+    // 4. 检查是否有处于高亮或展开状态的 typeahead 选项
     const activeItem = document.querySelector('[id^="typeahead-item-"]');
     if (activeItem && activeItem.isConnected) {
       const parentMenu = activeItem.closest('[role="listbox"]') || activeItem.parentElement;
       if (parentMenu) return parentMenu;
     }
 
-    // 3. 检查输入框本身是否有 aria-controls="typeahead-menu" 且目标已挂载
+    // 5. 检查输入框本身是否有 aria-controls="typeahead-menu" 且目标已挂载
     const controlledInput = document.querySelector('[aria-controls="typeahead-menu"]');
     if (controlledInput) {
       const target = document.getElementById('typeahead-menu');
       if (target && target.isConnected) return target;
     }
 
-    // 4. 检查展开状态的项目/工作区选择下拉弹出层
-    const openPoppers = document.querySelectorAll('[data-radix-popper-content-wrapper], [role="menu"]');
+    // 6. 检查展开状态的项目/工作区选择下拉弹出层
+    const openPoppers = document.querySelectorAll('[data-radix-popper-content-wrapper], [role="menu"], [role="listbox"], [data-state="open"]');
     for (const popper of openPoppers) {
-      if (popper.isConnected && (popper.querySelector('[data-testid*="project"]') || popper.querySelector('[data-project-name]'))) {
+      if (popper.isConnected) {
+        if (popper.id === 'agy-context-popover' || popper.closest('#agy-context-root')) {
+          continue;
+        }
         const r = popper.getBoundingClientRect();
-        if (r.height > 0 && r.width > 0) return popper;
+        if (r.height > 0 && r.width > 0) {
+          if (
+            popper.querySelector('[data-testid*="project"]') || 
+            popper.querySelector('[data-project-name]') ||
+            popper.querySelector('[data-pseudo-project]') ||
+            (popper.innerText && (
+              popper.innerText.includes('No Project') ||
+              popper.innerText.includes('Select Project') ||
+              popper.innerText.includes('Standalone Conversation') ||
+              popper.innerText.includes('Add Workspace')
+            ))
+          ) {
+            return popper;
+          }
+        }
       }
     }
 
@@ -824,16 +866,45 @@
     // 顶部横条状对齐对话框
     // 关键优化：防遮挡新建对话时左上角出现的“项目选择”栏（project-selector）
     let effectiveTop = rect.top;
-    const parentContainer = inputBox.closest('[data-testid="agent-input-box"]') || inputBox.parentElement;
-    if (parentContainer) {
-      for (const child of parentContainer.children) {
-        if (child !== inputBox && child.offsetParent !== null) {
-          const cRect = child.getBoundingClientRect();
-          if (cRect.height > 0 && cRect.top > 0 && cRect.top < effectiveTop) {
-            effectiveTop = cRect.top;
+
+    // 1. 显式侦测新建对话专属项目/工作区选择器（如：button[data-testid="project-selector-trigger"]）
+    const projectTrigger = document.querySelector('[data-testid="project-selector-trigger"]') ||
+                           document.querySelector('[aria-label^="Select project"]') ||
+                           document.querySelector('[aria-label^="Select workspace"]');
+    if (projectTrigger && projectTrigger.offsetParent !== null) {
+      const pContainer = projectTrigger.closest('.no-focus-agent-input') || 
+                         projectTrigger.closest('[class*="flex-col"]') || 
+                         projectTrigger;
+      const pRect = pContainer.getBoundingClientRect();
+      if (pRect.height > 0 && pRect.top > 0 && pRect.top < effectiveTop && pRect.bottom <= effectiveTop + 30) {
+        effectiveTop = Math.min(effectiveTop, pRect.top);
+      }
+    }
+
+    // 2. 深度遍历输入框容器内部子节点、前置兄弟节点及父层前置兄弟节点（防遮挡横幅、标签栏等）
+    let curr = inputBox;
+    for (let depth = 0; depth < 4 && curr && curr !== document.body; depth++) {
+      if (curr !== inputBox && curr.children) {
+        for (const child of curr.children) {
+          if (!child.contains(inputBox) && child.offsetParent !== null) {
+            const cRect = child.getBoundingClientRect();
+            if (cRect.height > 0 && cRect.height < 150 && cRect.top > 0 && cRect.top < effectiveTop && cRect.bottom <= effectiveTop + 30) {
+              effectiveTop = Math.min(effectiveTop, cRect.top);
+            }
           }
         }
       }
+      let prev = curr.previousElementSibling;
+      while (prev) {
+        if (prev.offsetParent !== null) {
+          const sRect = prev.getBoundingClientRect();
+          if (sRect.height > 0 && sRect.height < 150 && sRect.top > 0 && sRect.top < effectiveTop && sRect.bottom <= effectiveTop + 30) {
+            effectiveTop = Math.min(effectiveTop, sRect.top);
+          }
+        }
+        prev = prev.previousElementSibling;
+      }
+      curr = curr.parentElement;
     }
 
     const targetLeft = rect.left;

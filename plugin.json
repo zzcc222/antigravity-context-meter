@@ -1,7 +1,7 @@
 {
   "name": "antigravity-context-meter",
   "displayName": "Antigravity 上下文流光长条组件",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "在对话框正上方展示对齐的长条状流光上下文容量条，支持工具调用、思考、智能体回复各模块明细透视与跨项目会话自动联动。",
   "author": "Antigravity Pair",
   "enabled": true
