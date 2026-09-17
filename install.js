@@ -100,8 +100,9 @@ if (fs.existsSync(ipcPath)) {
 // 5. 启动后台独立微服务
 console.log('\x1b[37m[5/5] 启动本地极速统计微服务 (127.0.0.1:49152)...\x1b[0m');
 try {
-  // 查找并停止旧服务
-  execSync('powershell -Command "Get-CimInstance Win32_Process -Filter \\"Name = \'node.exe\'\\" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match \'contextServer\' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"', { stdio: 'ignore' });
+  // 查找并停止旧服务 (支持占用 49152 端口的 node.exe 或 Antigravity.exe)
+  const killCmd = `powershell -Command "try { $pids = Get-NetTCPConnection -LocalPort 49152 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach ($p in $pids) { if ($p -gt 0) { Stop-Process -Id $p -Force -ErrorAction SilentlyContinue } } } catch {}; try { Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine -match 'contextServer' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } } catch {}"`;
+  execSync(killCmd, { stdio: 'ignore' });
 } catch (e) {}
 
 const serverTarget = path.join(distDir, 'contextServer.js');

@@ -22,7 +22,7 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({
       status: 'ok',
       service: 'antigravity-context-meter',
-      version: '1.0.2',
+      version: '1.0.3',
       pid: process.pid,
       uptimeSeconds: Math.floor((Date.now() - startTime) / 1000)
     }));
@@ -32,7 +32,7 @@ const server = http.createServer((req, res) => {
   // 2. 核心 Token 统计查询
   if (req.url.startsWith('/stats')) {
     try {
-      const u = new URL(req.url, 'http://127.0.0.1:49152');
+      const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
       const convoId = u.searchParams.get('convoId');
       // 正则校验 convoId 防范路径穿越
       if (convoId && !/^[0-9a-zA-Z_-]+$/.test(convoId)) {
@@ -56,12 +56,22 @@ const server = http.createServer((req, res) => {
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.log(`[contextServer] Port ${PORT} already in use, continuing.`);
+    console.log(`[contextServer] Port ${PORT} already in use, another instance is active. Exiting cleanly.`);
+    process.exit(0);
   } else {
     console.error('[contextServer] Server error:', err);
   }
 });
 
+process.on('SIGINT', () => {
+  server.close(() => process.exit(0));
+});
+
+process.on('SIGTERM', () => {
+  server.close(() => process.exit(0));
+});
+
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Context Stats HTTP Server listening on http://127.0.0.1:${PORT}`);
 });
+

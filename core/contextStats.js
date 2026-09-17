@@ -29,60 +29,13 @@ function estimateTokens(text) {
 }
 
 function getActiveConversationId() {
-  const annotDir = path.join(os.homedir(), '.gemini', 'antigravity', 'annotations');
-  if (fs.existsSync(annotDir)) {
-    try {
-      const files = fs.readdirSync(annotDir);
-      let latestConvo = null;
-      let maxTime = 0;
-
-      for (const f of files) {
-        if (f.endsWith('.pbtxt')) {
-          const text = fs.readFileSync(path.join(annotDir, f), 'utf8');
-          const mSec = text.match(/seconds:\s*(\d+)/);
-          const mNano = text.match(/nanos:\s*(\d+)/);
-          if (mSec) {
-            const sec = parseInt(mSec[1], 10);
-            const nano = mNano ? parseInt(mNano[1], 10) : 0;
-            const totalTime = sec * 1000 + Math.floor(nano / 1000000);
-            if (totalTime > maxTime) {
-              maxTime = totalTime;
-              latestConvo = f.replace('.pbtxt', '');
-            }
-          }
-        }
-      }
-      if (latestConvo) return latestConvo;
-    } catch (e) {}
-  }
-
-  const brainDir = path.join(os.homedir(), '.gemini', 'antigravity', 'brain');
-  if (!fs.existsSync(brainDir)) return null;
-
-  try {
-    const entries = fs.readdirSync(brainDir);
-    let latestConvo = null;
-    let latestMtime = 0;
-
-    for (const id of entries) {
-      const logFile = path.join(brainDir, id, '.system_generated', 'logs', 'transcript.jsonl');
-      if (fs.existsSync(logFile)) {
-        const stat = fs.statSync(logFile);
-        if (stat.mtimeMs > latestMtime) {
-          latestMtime = stat.mtimeMs;
-          latestConvo = id;
-        }
-      }
-    }
-    return latestConvo;
-  } catch (e) {
-    return null;
-  }
+  // 服务端不需要主动扫描，由前端 DOM 准确实时嗅探并通过 query 传入
+  return null;
 }
 
-let cachedStats = null;
-let cachedMtime = 0;
-let cachedConvoId = null;
+const statsCache = new Map(); // convoId -> { mtimeMs, stats }
+const artifactCache = new Map(); // filePath -> { mtimeMs, tokens }
+
 
 function getConversationStats(targetConvoId) {
   if (!targetConvoId || targetConvoId === '_new' || typeof targetConvoId !== 'string') {
@@ -136,8 +89,9 @@ function getConversationStats(targetConvoId) {
 
   try {
     const stat = fs.statSync(targetFile);
-    if (cachedStats && cachedConvoId === convoId && stat.mtimeMs === cachedMtime) {
-      return cachedStats;
+    const cached = statsCache.get(convoId);
+    if (cached && cached.mtimeMs === stat.mtimeMs) {
+      return cached.stats;
     }
 
     const content = fs.readFileSync(targetFile, 'utf8');
@@ -186,8 +140,19 @@ function getConversationStats(targetConvoId) {
         const files = fs.readdirSync(artifactsDir);
         for (const file of files) {
           if (file.endsWith('.md')) {
-            const artText = fs.readFileSync(path.join(artifactsDir, file), 'utf8');
-            artifactsTokens += estimateTokens(artText);
+            const fullArtPath = path.join(artifactsDir, file);
+            try {
+              const artStat = fs.statSync(fullArtPath);
+              const cachedArt = artifactCache.get(fullArtPath);
+              if (cachedArt && cachedArt.mtimeMs === artStat.mtimeMs) {
+                artifactsTokens += cachedArt.tokens;
+              } else {
+                const artText = fs.readFileSync(fullArtPath, 'utf8');
+                const tok = estimateTokens(artText);
+                artifactCache.set(fullArtPath, { mtimeMs: artStat.mtimeMs, tokens: tok });
+                artifactsTokens += tok;
+              }
+            } catch (e) {}
           }
         }
       }
@@ -195,7 +160,7 @@ function getConversationStats(targetConvoId) {
 
     const totalTokens = userTokens + modelThinkingTokens + modelOutputTokens + toolOutputTokens + systemPromptTokens + artifactsTokens;
 
-    cachedStats = {
+    const computedStats = {
       convoId,
       userTokens,
       modelThinkingTokens,
@@ -206,13 +171,30 @@ function getConversationStats(targetConvoId) {
       totalTokens,
       stepCount: validStepsCount
     };
-    cachedMtime = stat.mtimeMs;
-    cachedConvoId = convoId;
 
-    return cachedStats;
+    if (statsCache.size > 100) {
+      statsCache.clear();
+    }
+    statsCache.set(convoId, {
+      mtimeMs: stat.mtimeMs,
+      stats: computedStats
+    });
+
+    return computedStats;
   } catch (e) {
     console.error('[contextStats] Error reading log:', e);
-    return cachedStats;
+    const fallback = statsCache.get(convoId);
+    return fallback ? fallback.stats : {
+      convoId,
+      userTokens: 0,
+      modelThinkingTokens: 0,
+      modelOutputTokens: 0,
+      toolOutputTokens: 0,
+      systemPromptTokens: 0,
+      artifactsTokens: 0,
+      totalTokens: 0,
+      stepCount: 0
+    };
   }
 }
 

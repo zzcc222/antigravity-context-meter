@@ -61,9 +61,10 @@ if (!appDir) {
   console.log('\x1b[32m[3/3] 已清理核心统计组件\x1b[0m');
 }
 
-// 终止后台服务
+// 终止后台服务 (支持占用 49152 端口的 node.exe 或 Antigravity.exe)
 try {
-  execSync('powershell -Command "Get-CimInstance Win32_Process -Filter \\"Name = \'node.exe\'\\" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match \'contextServer\' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"', { stdio: 'ignore' });
+  const killCmd = `powershell -Command "try { $pids = Get-NetTCPConnection -LocalPort 49152 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach ($p in $pids) { if ($p -gt 0) { Stop-Process -Id $p -Force -ErrorAction SilentlyContinue } } } catch {}; try { Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine -match 'contextServer' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } } catch {}"`;
+  execSync(killCmd, { stdio: 'ignore' });
 } catch (e) {}
 
 console.log('\n\x1b[32m=========================================================\x1b[0m');

@@ -40,6 +40,12 @@
     userLabel: isZh ? '👤 用户指令与提问' : '👤 User Prompts',
     sysLabel: isZh ? '⚙️ 系统预设与规则' : '⚙️ System Rules',
     artLabel: isZh ? '📄 工件与关联文档' : '📄 Artifacts & Docs',
+    toolsTitle: isZh ? '工具调用与输出' : 'Tool Calls & Output',
+    modelTitle: isZh ? '智能体回复' : 'Agent Responses',
+    thinkTitle: isZh ? '深度思考' : 'Deep Thinking',
+    userTitle: isZh ? '用户输入' : 'User Prompts',
+    sysTitle: isZh ? '系统规则' : 'System Rules',
+    artTitle: isZh ? '关联文档' : 'Artifacts & Docs',
     pinBtn: isZh ? '📌 点击锁定' : '📌 Pin Card',
     pinnedBtn: isZh ? '📌 已锁定 (点击解锁)' : '📌 Pinned (Click to unpin)',
     healthGood: (avail) => isZh ? ('🟢 空间极其充裕 (' + avail + ' 可用)') : ('🟢 Abundant Space (' + avail + ' avail)'),
@@ -313,6 +319,8 @@
         bottom: calc(100% + 8px);
         right: 0;
         width: 360px;
+        max-width: min(360px, calc(100vw - 24px));
+        box-sizing: border-box;
         background: rgba(16, 20, 32, 0.98);
         backdrop-filter: blur(24px);
         -webkit-backdrop-filter: blur(24px);
@@ -473,6 +481,16 @@
   let rootEl = null;
   let popoverPinned = false;
   let currentConvoId = null;
+  let documentClickBound = false;
+  let rafPositionId = null;
+
+  function schedulePositionWidget() {
+    if (rafPositionId !== null) return;
+    rafPositionId = requestAnimationFrame(() => {
+      rafPositionId = null;
+      positionWidget();
+    });
+  }
 
   function ensureWidget() {
     if (!document.body) return;
@@ -493,12 +511,12 @@
           </div>
 
           <div class="agy-progress-track" id="agy-progress-track" title="${i18n.trackTitle}">
-            <div class="agy-progress-segment agy-seg-tools" id="agy-seg-tools" style="width: 0%" title="工具调用与输出"></div>
-            <div class="agy-progress-segment agy-seg-model" id="agy-seg-model" style="width: 0%" title="智能体回复"></div>
-            <div class="agy-progress-segment agy-seg-think" id="agy-seg-think" style="width: 0%" title="深度思考"></div>
-            <div class="agy-progress-segment agy-seg-user" id="agy-seg-user" style="width: 0%" title="用户输入"></div>
-            <div class="agy-progress-segment agy-seg-system" id="agy-seg-system" style="width: 0%" title="系统规则"></div>
-            <div class="agy-progress-segment agy-seg-artifacts" id="agy-seg-artifacts" style="width: 0%" title="关联文档"></div>
+            <div class="agy-progress-segment agy-seg-tools" id="agy-seg-tools" style="width: 0%" title="${i18n.toolsTitle}"></div>
+            <div class="agy-progress-segment agy-seg-model" id="agy-seg-model" style="width: 0%" title="${i18n.modelTitle}"></div>
+            <div class="agy-progress-segment agy-seg-think" id="agy-seg-think" style="width: 0%" title="${i18n.thinkTitle}"></div>
+            <div class="agy-progress-segment agy-seg-user" id="agy-seg-user" style="width: 0%" title="${i18n.userTitle}"></div>
+            <div class="agy-progress-segment agy-seg-system" id="agy-seg-system" style="width: 0%" title="${i18n.sysTitle}"></div>
+            <div class="agy-progress-segment agy-seg-artifacts" id="agy-seg-artifacts" style="width: 0%" title="${i18n.artTitle}"></div>
             <div class="agy-progress-shimmer"></div>
           </div>
 
@@ -596,6 +614,16 @@
       const showPopover = () => {
         popover.style.display = 'flex';
         rootEl.style.zIndex = '50';
+        try {
+          const pRect = popover.getBoundingClientRect();
+          if (pRect.left < 10) {
+            popover.style.right = 'auto';
+            popover.style.left = '0';
+          } else {
+            popover.style.right = '0';
+            popover.style.left = 'auto';
+          }
+        } catch (e) {}
       };
 
       const hidePopover = () => {
@@ -631,14 +659,20 @@
         if (pinBtn) pinBtn.innerText = i18n.pinBtn;
       });
 
-      document.addEventListener('click', (e) => {
-        if (!rootEl.contains(e.target)) {
-          popoverPinned = false;
-          popover.style.display = 'none';
-          rootEl.style.zIndex = '30';
-          if (pinBtn) pinBtn.innerText = i18n.pinBtn;
-        }
-      });
+      if (!documentClickBound) {
+        documentClickBound = true;
+        document.addEventListener('click', (e) => {
+          if (!rootEl || !rootEl.contains(e.target)) {
+            popoverPinned = false;
+            const pop = document.getElementById('agy-context-popover');
+            if (pop) pop.style.display = 'none';
+            const r = document.getElementById('agy-context-root');
+            if (r) r.style.zIndex = '30';
+            const pin = document.getElementById('agy-pin-btn');
+            if (pin) pin.innerText = i18n.pinBtn;
+          }
+        });
+      }
 
       refreshBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1090,39 +1124,37 @@
       ensureWidget();
       updateStats();
 
-      window.addEventListener('resize', positionWidget);
-      window.addEventListener('scroll', positionWidget, true);
+      window.addEventListener('resize', schedulePositionWidget);
+      window.addEventListener('scroll', schedulePositionWidget, true);
 
-      // 监听快捷键触发与按键，对 @ / 及回车、Esc、退格等极速响应，消除延迟
+      // 监听快捷键触发与按键，对 @ / 及回车、Esc、退格等极速响应，消除延迟同时避免定时器雪崩
       window.addEventListener('keydown', (e) => {
         if (e.key === '@' || e.key === '/' || e.key === 'Backspace' || e.key === 'Escape' || e.key === 'Enter') {
-          requestAnimationFrame(positionWidget);
-          setTimeout(positionWidget, 10);
-          setTimeout(positionWidget, 40);
-          setTimeout(positionWidget, 120);
+          schedulePositionWidget();
+          setTimeout(schedulePositionWidget, 40);
         }
       }, true);
 
-      window.addEventListener('input', () => {
-        requestAnimationFrame(positionWidget);
-      }, true);
-
-      window.addEventListener('pointerdown', () => {
-        requestAnimationFrame(positionWidget);
-      }, true);
+      window.addEventListener('input', schedulePositionWidget, true);
+      window.addEventListener('pointerdown', schedulePositionWidget, true);
 
       // 1.5s 极速轮询与动态位置纠正
       setInterval(() => {
-        positionWidget();
+        schedulePositionWidget();
         updateStats();
       }, 1500);
 
+      let observerRafId = null;
       const observer = new MutationObserver(() => {
-        positionWidget();
-        const newCid = getActiveConversationId();
-        if (newCid !== currentConvoId) {
-          updateStats();
-        }
+        if (observerRafId !== null) return;
+        observerRafId = requestAnimationFrame(() => {
+          observerRafId = null;
+          positionWidget();
+          const newCid = getActiveConversationId();
+          if (newCid !== currentConvoId) {
+            updateStats();
+          }
+        });
       });
       observer.observe(document.body, { childList: true, subtree: true });
     };
