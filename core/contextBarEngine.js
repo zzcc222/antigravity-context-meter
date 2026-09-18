@@ -54,7 +54,9 @@
   };
 
   function formatTokens(count) {
-    if (!count) return '0';
+    if (!count || count <= 0) return '0';
+    if (count === 1048576) return '1.0M';
+    if (count === 2097152) return '2.0M';
     if (count >= 1000000) return (count / 1000000).toFixed(2) + 'M';
     if (count >= 1000) return (count / 1000).toFixed(1) + 'k';
     return count.toLocaleString();
@@ -595,7 +597,7 @@
           </div>
 
           <div class="agy-pop-footer">
-            <span class="agy-health-pill" id="agy-health-badge">${i18n.healthGood('1.05M')}</span>
+            <span class="agy-health-pill" id="agy-health-badge">${i18n.healthGood('1.0M')}</span>
             <span class="agy-pin-indicator" id="agy-pin-btn">${i18n.pinBtn}</span>
           </div>
         </div>
@@ -1033,76 +1035,75 @@
       }
     }
 
-    const total = Math.max(1, totalTokens);
-    const setWidth = (id, tokens) => {
+    const scale = (totalTokens > maxLimit && maxLimit > 0) ? (maxLimit / totalTokens) : 1;
+    const setTrackSegment = (id, tokens, titleName) => {
       const el = rootEl.querySelector(id);
       if (el) {
-        if (totalTokens === 0) {
+        const tok = tokens || 0;
+        if (totalTokens === 0 || !maxLimit) {
           el.style.width = '0%';
         } else {
-          el.style.width = (((tokens || 0) / total) * 100).toFixed(1) + '%';
+          const segPct = (((tok * scale) / maxLimit) * 100);
+          el.style.width = segPct.toFixed(2) + '%';
         }
+        const capPct = (maxLimit > 0 && tok > 0) ? ((tok / maxLimit) * 100).toFixed(1) + '%' : '0%';
+        el.title = `${titleName}: ${formatTokens(tok)} (${capPct})`;
       }
     };
 
-    setWidth('#agy-seg-tools', stats.toolOutputTokens || 0);
-    setWidth('#agy-seg-model', stats.modelOutputTokens || 0);
-    setWidth('#agy-seg-think', stats.modelThinkingTokens || 0);
-    setWidth('#agy-seg-user', stats.userTokens || 0);
-    setWidth('#agy-seg-system', stats.systemPromptTokens || 0);
-    setWidth('#agy-seg-artifacts', stats.artifactsTokens || 0);
+    setTrackSegment('#agy-seg-tools', stats.toolOutputTokens, i18n.toolsTitle);
+    setTrackSegment('#agy-seg-model', stats.modelOutputTokens, i18n.modelTitle);
+    setTrackSegment('#agy-seg-think', stats.modelThinkingTokens, i18n.thinkTitle);
+    setTrackSegment('#agy-seg-user', stats.userTokens, i18n.userTitle);
+    setTrackSegment('#agy-seg-system', stats.systemPromptTokens, i18n.sysTitle);
+    setTrackSegment('#agy-seg-artifacts', stats.artifactsTokens, i18n.artTitle);
 
     const setText = (id, text) => {
       const el = rootEl.querySelector(id);
       if (el) el.innerText = text;
     };
 
-    const setMiniBar = (id, tokens) => {
-      const el = rootEl.querySelector(id);
-      if (el) {
-        if (totalTokens === 0) {
-          el.style.width = '0%';
-        } else {
-          el.style.width = Math.min(100, (((tokens || 0) / total) * 100)).toFixed(1) + '%';
-        }
+    setText('#agy-pop-model-badge', modelName);
+
+    const updatePopRow = (prefix, label, tokens) => {
+      const tok = tokens || 0;
+      const capPct = (maxLimit > 0 && tok > 0) ? ((tok / maxLimit) * 100) : 0;
+      const usedPct = (totalTokens > 0 && tok > 0) ? ((tok / totalTokens) * 100) : 0;
+
+      setText(`#pop-${prefix}-tok`, tok.toLocaleString());
+      setText(`#pop-${prefix}-pct`, capPct.toFixed(1) + '%');
+
+      const bar = rootEl.querySelector(`#pop-${prefix}-bar`);
+      if (bar) {
+        bar.style.width = Math.min(100, capPct).toFixed(1) + '%';
+      }
+
+      const tokEl = rootEl.querySelector(`#pop-${prefix}-tok`);
+      const row = tokEl ? tokEl.closest('.agy-stat-row') : null;
+      if (row) {
+        row.title = isZh
+          ? `${label}: ${tok.toLocaleString()} Tokens (占总容量 ${capPct.toFixed(2)}% / 占已用 ${usedPct.toFixed(1)}%)`
+          : `${label}: ${tok.toLocaleString()} Tokens (${capPct.toFixed(2)}% of capacity / ${usedPct.toFixed(1)}% of used)`;
       }
     };
 
-    setText('#agy-pop-model-badge', modelName);
-
-    setText('#pop-tools-tok', (stats.toolOutputTokens || 0).toLocaleString());
-    setText('#pop-tools-pct', totalTokens === 0 ? '0%' : (((stats.toolOutputTokens || 0) / total) * 100).toFixed(1) + '%');
-    setMiniBar('#pop-tools-bar', stats.toolOutputTokens);
-
-    setText('#pop-model-tok', (stats.modelOutputTokens || 0).toLocaleString());
-    setText('#pop-model-pct', totalTokens === 0 ? '0%' : (((stats.modelOutputTokens || 0) / total) * 100).toFixed(1) + '%');
-    setMiniBar('#pop-model-bar', stats.modelOutputTokens);
-
-    setText('#pop-think-tok', (stats.modelThinkingTokens || 0).toLocaleString());
-    setText('#pop-think-pct', totalTokens === 0 ? '0%' : (((stats.modelThinkingTokens || 0) / total) * 100).toFixed(1) + '%');
-    setMiniBar('#pop-think-bar', stats.modelThinkingTokens);
-
-    setText('#pop-user-tok', (stats.userTokens || 0).toLocaleString());
-    setText('#pop-user-pct', totalTokens === 0 ? '0%' : (((stats.userTokens || 0) / total) * 100).toFixed(1) + '%');
-    setMiniBar('#pop-user-bar', stats.userTokens);
-
-    setText('#pop-sys-tok', (stats.systemPromptTokens || 0).toLocaleString());
-    setText('#pop-sys-pct', totalTokens === 0 ? '0%' : (((stats.systemPromptTokens || 0) / total) * 100).toFixed(1) + '%');
-    setMiniBar('#pop-sys-bar', stats.systemPromptTokens);
-
-    setText('#pop-art-tok', (stats.artifactsTokens || 0).toLocaleString());
-    setText('#pop-art-pct', totalTokens === 0 ? '0%' : (((stats.artifactsTokens || 0) / total) * 100).toFixed(1) + '%');
-    setMiniBar('#pop-art-bar', stats.artifactsTokens);
+    updatePopRow('tools', i18n.toolsLabel, stats.toolOutputTokens);
+    updatePopRow('model', i18n.modelLabel, stats.modelOutputTokens);
+    updatePopRow('think', i18n.thinkLabel, stats.modelThinkingTokens);
+    updatePopRow('user', i18n.userLabel, stats.userTokens);
+    updatePopRow('sys', i18n.sysLabel, stats.systemPromptTokens);
+    updatePopRow('art', i18n.artLabel, stats.artifactsTokens);
 
     const healthBadge = rootEl.querySelector('#agy-health-badge');
     if (healthBadge) {
-      if (pct < 30) {
-        healthBadge.innerText = i18n.healthGood(formatTokens(maxLimit - totalTokens));
+      const availTokens = Math.max(0, maxLimit - totalTokens);
+      if (pct < 50) {
+        healthBadge.innerText = i18n.healthGood(formatTokens(availTokens));
         healthBadge.style.color = '#34d399';
         healthBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
         healthBadge.style.background = 'rgba(16, 185, 129, 0.15)';
-      } else if (pct < 70) {
-        healthBadge.innerText = i18n.healthMed(formatTokens(maxLimit - totalTokens));
+      } else if (pct < 80) {
+        healthBadge.innerText = i18n.healthMed(formatTokens(availTokens));
         healthBadge.style.color = '#fbbf24';
         healthBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
         healthBadge.style.background = 'rgba(245, 158, 11, 0.15)';
