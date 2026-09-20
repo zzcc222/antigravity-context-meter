@@ -779,6 +779,9 @@
       '.mentions-menu',
       '.typeahead-popover',
       '[role="listbox"][aria-label="Mentions"]',
+      '[role="listbox"][aria-label="提及"]',
+      '[role="listbox"][aria-label="预输入菜单"]',
+      '[role="listbox"][aria-label*="Mention"]',
       '[role="listbox"][aria-label*="Typeahead"]',
       '[role="listbox"][aria-label*="Slash"]'
     ];
@@ -786,7 +789,7 @@
       const el = document.querySelector(sel);
       if (el && el.isConnected) {
         const rect = el.getBoundingClientRect();
-        if (rect.height > 0 || el.childNodes.length > 0 || el.offsetParent !== null) {
+        if (rect.height > 0 && (rect.width > 0 || el.children.length > 0)) {
           return el;
         }
       }
@@ -799,11 +802,11 @@
       if (parentMenu) return parentMenu;
     }
 
-    // 5. 检查输入框本身是否有 aria-controls="typeahead-menu" 且目标已挂载
+    // 5. 检查输入框本身是否有 aria-controls="typeahead-menu" 且目标已挂载并有实际子内容
     const controlledInput = document.querySelector('[aria-controls="typeahead-menu"]');
     if (controlledInput) {
       const target = document.getElementById('typeahead-menu');
-      if (target && target.isConnected) return target;
+      if (target && target.isConnected && (target.children.length > 0 || target.getBoundingClientRect().height > 0)) return target;
     }
 
     // 6. 检查展开状态的项目/工作区选择下拉弹出层
@@ -870,14 +873,55 @@
       return;
     }
 
+    // 显式侦测新建对话专属项目/工作区选择器（如：button[data-testid="project-selector-trigger"]）
+    const projectTrigger = document.querySelector('[data-testid="project-selector-trigger"]') ||
+                           document.querySelector('[aria-label^="Select project"]') ||
+                           document.querySelector('[aria-label^="Select workspace"]');
+
     // 检测是否有 @ (mentions) 或 / (slash command / tools) 联想菜单正在弹出显示
     const typeaheadMenu = getTypeaheadOrMentionMenu();
+
+    // 始终清理 projectTrigger 按钮本身的异常高层级 z-index，避免其残留浮在命令菜单上方导致严重重叠
+    if (projectTrigger && (!typeaheadMenu || (typeaheadMenu.getAttribute && typeaheadMenu.getAttribute('data-testid') !== 'project-selector-trigger'))) {
+      projectTrigger.style.removeProperty('z-index');
+      if (projectTrigger.parentElement) {
+        projectTrigger.parentElement.style.removeProperty('z-index');
+      }
+    }
+
     if (typeaheadMenu) {
-      // 将提示菜单提到最高层级，保证无遮挡且百分百可点击
+      // 1. 将提示菜单提到最高层级，保证无遮挡且百分百可点击
       try {
-        typeaheadMenu.style.zIndex = '99999';
-        if (typeaheadMenu.parentElement && typeaheadMenu.parentElement.classList && typeaheadMenu.parentElement.classList.contains('relative')) {
-          typeaheadMenu.parentElement.style.zIndex = '9999';
+        if (!typeaheadMenu.getAttribute || typeaheadMenu.getAttribute('data-testid') !== 'project-selector-trigger') {
+          typeaheadMenu.style.zIndex = '99999';
+          if (typeaheadMenu.parentElement && typeaheadMenu.parentElement.classList && typeaheadMenu.parentElement.classList.contains('relative')) {
+            typeaheadMenu.parentElement.style.zIndex = '9999';
+          }
+        }
+      } catch (e) {}
+
+      // 2. 关键防重叠：在新建对话（未选项目或包含项目选择器按钮时），斜杠/艾特命令菜单默认在 inputBox 上方 (bottom-full mb-2)
+      // 这会导致其底部与上方紧邻的“新建对话”/项目选择器重叠。
+      // 我们动态计算 projectTrigger / pContainer 的位置，若存在于输入框正上方，则将菜单整体上移至其上方！
+      try {
+        if (projectTrigger && projectTrigger.offsetParent !== null && inputBox) {
+          const pContainer = projectTrigger.closest('.no-focus-agent-input') || 
+                             projectTrigger.closest('[class*="flex-col"]') || 
+                             projectTrigger;
+          const pRect = pContainer.getBoundingClientRect();
+          const iRect = inputBox.getBoundingClientRect();
+          if (pRect.height > 0 && pRect.top > 0 && pRect.top < iRect.top) {
+            const offset = Math.round(iRect.top - pRect.top + 6);
+            typeaheadMenu.style.bottom = 'calc(100% + ' + offset + 'px)';
+            typeaheadMenu.style.marginBottom = '0px';
+
+            // 防止窗口上方视口空间不足被截断
+            const mRect = typeaheadMenu.getBoundingClientRect();
+            if (mRect.top < 10) {
+              const maxH = Math.max(120, Math.floor(iRect.top - offset - 10));
+              typeaheadMenu.style.maxHeight = maxH + 'px';
+            }
+          }
         }
       } catch (e) {}
 
@@ -904,9 +948,6 @@
     let effectiveTop = rect.top;
 
     // 1. 显式侦测新建对话专属项目/工作区选择器（如：button[data-testid="project-selector-trigger"]）
-    const projectTrigger = document.querySelector('[data-testid="project-selector-trigger"]') ||
-                           document.querySelector('[aria-label^="Select project"]') ||
-                           document.querySelector('[aria-label^="Select workspace"]');
     if (projectTrigger && projectTrigger.offsetParent !== null) {
       const pContainer = projectTrigger.closest('.no-focus-agent-input') || 
                          projectTrigger.closest('[class*="flex-col"]') || 
