@@ -958,7 +958,17 @@
       }
     }
 
-    // 2. 深度遍历输入框容器内部子节点、前置兄弟节点及父层前置兄弟节点（防遮挡横幅、标签栏等）
+    // 2. 显式侦测 /btw 侧边小对话面板（side-question-panel），防遮挡其内部文字与答案内容
+    const sideQuestion = document.querySelector('[data-testid="side-question-panel"]') ||
+                         document.querySelector('[data-testid*="side-question"]');
+    if (sideQuestion && sideQuestion.offsetParent !== null) {
+      const sqRect = sideQuestion.getBoundingClientRect();
+      if (sqRect.height > 0 && sqRect.top > 0 && sqRect.top < effectiveTop && sqRect.bottom <= effectiveTop + 30) {
+        effectiveTop = Math.max(36, Math.min(effectiveTop, sqRect.top));
+      }
+    }
+
+    // 3. 深度遍历输入框容器内部子节点、前置兄弟节点及父层前置兄弟节点（防遮挡横幅、标签栏等）
     let curr = inputBox;
     for (let depth = 0; depth < 4 && curr && curr !== document.body; depth++) {
       if (curr !== inputBox && curr.children) {
@@ -1179,6 +1189,7 @@
 
       window.addEventListener('input', schedulePositionWidget, true);
       window.addEventListener('pointerdown', schedulePositionWidget, true);
+      window.addEventListener('pointerup', schedulePositionWidget, true);
 
       // 1.5s 极速轮询与动态位置纠正
       setInterval(() => {

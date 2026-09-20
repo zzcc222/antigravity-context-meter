@@ -22,7 +22,7 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({
       status: 'ok',
       service: 'antigravity-context-meter',
-      version: '1.0.5',
+      version: '1.0.6',
       pid: process.pid,
       uptimeSeconds: Math.floor((Date.now() - startTime) / 1000)
     }));
