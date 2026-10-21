@@ -50,8 +50,43 @@
     pinnedBtn: isZh ? '📌 已锁定 (点击解锁)' : '📌 Pinned (Click to unpin)',
     healthGood: (avail) => isZh ? ('🟢 空间极其充裕 (' + avail + ' 可用)') : ('🟢 Abundant Space (' + avail + ' avail)'),
     healthMed: (avail) => isZh ? ('🟡 容量正常适中 (' + avail + ' 可用)') : ('🟡 Moderate Usage (' + avail + ' avail)'),
-    healthWarn: isZh ? '🔴 接近上限建议开启新会话' : '🔴 Near Limit, Consider New Chat'
+    healthWarn: isZh ? '🔴 接近上限建议开启新会话' : '🔴 Near Limit, Consider New Chat',
+    speedBadgeTitleIdle: isZh ? '实时速率 (当前待机 0 t/s)' : 'Real-time Speed (Idle 0 t/s)',
+    speedBadgeTitleActive: isZh ? '⚡ 正在吐字 (实时速率)' : '⚡ Streaming (Live Speed)',
+    speedPerfTitle: isZh ? '⚡ 模型推理与生成性能' : '⚡ Model Inference & Speed',
+    liveSpeedLabel: isZh ? '实时速率' : 'Live Rate',
+    avgSpeedLabel: isZh ? '平均速率' : 'Avg Speed',
+    turnDurationLabel: isZh ? '生成耗时' : 'Duration',
+    turnTokensLabel: isZh ? '生成词数' : 'Tokens',
+    statusIdle: isZh ? '🟢 待机' : '🟢 Idle',
+    statusActive: isZh ? '⚡ 正在吐字...' : '⚡ Streaming...',
+    breakdownThink: isZh ? '思考' : 'Think',
+    breakdownOutput: isZh ? '输出' : 'Output',
+    peakRateLabel: isZh ? '峰值' : 'Peak'
   };
+
+  function estimateTokens(text) {
+    if (!text || typeof text !== 'string') return 0;
+    let cjkCount = 0;
+    let otherCount = 0;
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      if (
+        (code >= 0x4e00 && code <= 0x9fff) ||
+        (code >= 0x3400 && code <= 0x4dbf) ||
+        (code >= 0xf900 && code <= 0xfaff) ||
+        (code >= 0x3000 && code <= 0x303f) ||
+        (code >= 0xff00 && code <= 0xffef) ||
+        (code >= 0x3040 && code <= 0x30ff) ||
+        (code >= 0xac00 && code <= 0xd7af)
+      ) {
+        cjkCount++;
+      } else {
+        otherCount++;
+      }
+    }
+    return Math.round(cjkCount * 1.15 + otherCount / 3.7);
+  }
 
   function formatTokens(count) {
     if (!count || count <= 0) return '0';
@@ -95,6 +130,16 @@
       @keyframes agyFadeUp {
         from { opacity: 0; transform: translateY(6px) scale(0.98); }
         to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes agySpeedPulse {
+        0%, 100% {
+          box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+          border-color: rgba(56, 189, 248, 0.45);
+        }
+        50% {
+          box-shadow: 0 0 16px rgba(56, 189, 248, 0.85), 0 0 22px rgba(99, 102, 241, 0.5);
+          border-color: rgba(56, 189, 248, 0.95);
+        }
       }
 
       /* 顶部横条状长容器：z-index 设为 30，确保模型切换等高层级下拉菜单（z-index: 50+）自然在其上层展示 */
@@ -275,6 +320,29 @@
         white-space: nowrap;
       }
 
+      .agy-speed-badge {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 6px;
+        background: rgba(148, 163, 184, 0.12);
+        color: #94a3b8;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        font-variant-numeric: tabular-nums;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        white-space: nowrap;
+        transition: all 0.25s ease;
+        cursor: default;
+      }
+      .agy-speed-badge.agy-speed-active {
+        background: rgba(14, 165, 233, 0.2);
+        color: #38bdf8;
+        border-color: rgba(56, 189, 248, 0.65);
+        animation: agySpeedPulse 1.8s infinite ease-in-out;
+      }
+
       .agy-btn-detail {
         font-size: 11px;
         color: #cbd5e1;
@@ -344,7 +412,10 @@
       /* 窄屏自适应响应式 */
       @media (max-width: 480px) {
         .agy-model-badge { display: none !important; }
-        .agy-top-bar { gap: 8px !important; padding: 0 8px !important; }
+        .agy-top-bar { gap: 6px !important; padding: 0 6px !important; }
+        .agy-speed-badge { font-size: 10px !important; padding: 1px 5px !important; }
+        .agy-pop-speed-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        .agy-speed-subinfo { flex-direction: column !important; gap: 2px !important; align-items: flex-start !important; }
       }
 
       .agy-pop-header {
@@ -476,6 +547,84 @@
         background: rgba(99, 102, 241, 0.2);
         color: #a5b4fc;
       }
+
+      .agy-pop-speed-box {
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 9px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .agy-pop-speed-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #cbd5e1;
+        font-weight: 600;
+      }
+      .agy-pop-speed-status {
+        font-size: 10px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+      }
+      .agy-pop-speed-status.status-active {
+        background: rgba(56, 189, 248, 0.18);
+        color: #38bdf8;
+        border-color: rgba(56, 189, 248, 0.4);
+      }
+      .agy-pop-speed-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+        text-align: center;
+      }
+      .agy-speed-card {
+        background: rgba(0, 0, 0, 0.25);
+        padding: 6px 4px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .agy-speed-val {
+        font-size: 12px;
+        font-weight: 800;
+        color: #f8fafc;
+        font-variant-numeric: tabular-nums;
+      }
+      .agy-speed-val.agy-val-live {
+        color: #94a3b8;
+        transition: color 0.2s ease;
+      }
+      .agy-speed-val.agy-val-live.agy-live-active {
+        color: #38bdf8;
+        text-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+      }
+      .agy-speed-lbl {
+        font-size: 10px;
+        color: #94a3b8;
+        margin-top: 2px;
+        white-space: nowrap;
+      }
+      .agy-speed-subinfo {
+        font-size: 10px;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 5px;
+        margin-top: 2px;
+        border-top: 1px dashed rgba(255, 255, 255, 0.08);
+        font-variant-numeric: tabular-nums;
+      }
+      .agy-speed-subinfo strong {
+        color: #cbd5e1;
+        font-weight: 600;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -527,6 +676,7 @@
               <span class="agy-used-val" id="agy-used-val">0</span>
               <span class="agy-max-val" id="agy-max-val">/ 1.0M</span>
             </div>
+            <span class="agy-speed-badge" id="agy-speed-badge" title="${i18n.speedBadgeTitleIdle}">⚡ 0 t/s</span>
             <span class="agy-model-badge" id="agy-model-badge">Gemini 3.8 Flash</span>
             <span class="agy-btn-detail" id="agy-btn-detail">${i18n.detailBtn}</span>
             <button class="agy-refresh-btn" id="agy-refresh-btn" title="${i18n.refreshTitle}">
@@ -593,6 +743,36 @@
                 <span class="agy-stat-val"><span class="agy-stat-tokens" id="pop-art-tok">0</span><span class="agy-stat-pct" id="pop-art-pct">0%</span></span>
               </div>
               <div class="agy-stat-mini-bar"><div class="agy-stat-mini-fill" id="pop-art-bar" style="background:#eab308; width:0%;"></div></div>
+            </div>
+          </div>
+
+          <div class="agy-pop-speed-box" id="agy-pop-speed-box">
+            <div class="agy-pop-speed-head">
+              <span>${i18n.speedPerfTitle}</span>
+              <span class="agy-pop-speed-status" id="pop-speed-status">${i18n.statusIdle}</span>
+            </div>
+            <div class="agy-pop-speed-grid">
+              <div class="agy-speed-card">
+                <div class="agy-speed-val agy-val-live notranslate" translate="no" id="pop-speed-live">0 t/s</div>
+                <div class="agy-speed-lbl">${i18n.liveSpeedLabel}</div>
+              </div>
+              <div class="agy-speed-card">
+                <div class="agy-speed-val notranslate" translate="no" id="pop-speed-avg">--</div>
+                <div class="agy-speed-lbl">${i18n.avgSpeedLabel}</div>
+              </div>
+              <div class="agy-speed-card">
+                <div class="agy-speed-val notranslate" translate="no" id="pop-speed-dur">--</div>
+                <div class="agy-speed-lbl">${i18n.turnDurationLabel}</div>
+              </div>
+              <div class="agy-speed-card">
+                <div class="agy-speed-val notranslate" translate="no" id="pop-speed-tokens">--</div>
+                <div class="agy-speed-lbl">${i18n.turnTokensLabel}</div>
+              </div>
+            </div>
+            <div class="agy-speed-subinfo notranslate" translate="no" id="pop-speed-subinfo">
+              <span>🧠 ${i18n.breakdownThink}: <strong id="pop-sub-think">0</strong> tok</span>
+              <span>💬 ${i18n.breakdownOutput}: <strong id="pop-sub-output">0</strong> tok</span>
+              <span>🚀 ${i18n.peakRateLabel}: <strong id="pop-sub-peak">--</strong></span>
             </div>
           </div>
 
@@ -1008,17 +1188,323 @@
     rootEl.style.pointerEvents = 'auto';
   }
 
+  // 实时速率与生成性能跟踪状态
+  let isGenerating = false;
+  let streamStartTime = 0;
+  let streamStartTokens = 0;
+  let lastSampleTime = 0;
+  let lastSampleTokens = 0;
+  let activeStreamingDuration = 0;
+  let lastTokenIncrementTime = 0;
+  let liveEmaRate = 0;
+  let streamPeakRate = 0;
+  let localLastTurn = null; // { convoId, rate, durationSeconds, tokens, peakRate, thinkingTokens, outputTokens }
+  let cachedStats = null;   // { convoId, totalTokens, ..., lastTurn }
+
+  function getStoredTurn(cid) {
+    if (!cid) return null;
+    try {
+      const raw = sessionStorage.getItem('agy_turn_' + cid);
+      if (raw) {
+        const obj = JSON.parse(raw);
+        if (obj && obj.convoId === cid && obj.tokens > 0) return obj;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function detectIsGenerating() {
+    // 严格限定在主输入框内部查找当前活跃会话的取消/停止按钮
+    // Antigravity 在模型思考或生成时，输入框内会出现带有 Cancel / 取消 / Ctrl+D 或红方块 .bg-red-500 的按钮
+    const inputBox = document.getElementById('antigravity.agentSidePanelInputBox') || 
+                     document.querySelector('[data-testid="agent-input-box"]');
+    if (!inputBox || inputBox.offsetParent === null) return false;
+
+    const cancelBtn = inputBox.querySelector(
+      'button[aria-label*="Cancel"], button[aria-label*="取消"], button[aria-label*="Ctrl+D"], button:has(.bg-red-500), button:has([class*="bg-red-"])'
+    );
+    if (cancelBtn && cancelBtn.offsetParent !== null) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function getStreamingTokens() {
+    try {
+      const scrollArea = document.querySelector('.relative.w-full.flex-grow .overflow-y-auto') ||
+                         document.querySelector('.overflow-y-auto');
+      if (scrollArea) {
+        return estimateTokens(scrollArea.innerText || '');
+      }
+    } catch (e) {}
+    return 0;
+  }
+
+  function resetSpeedUI() {
+    if (!rootEl) return;
+    const speedBadge = rootEl.querySelector('#agy-speed-badge');
+    const popLive = rootEl.querySelector('#pop-speed-live');
+    const popAvg = rootEl.querySelector('#pop-speed-avg');
+    const popDur = rootEl.querySelector('#pop-speed-dur');
+    const popTok = rootEl.querySelector('#pop-speed-tokens');
+    const popStatus = rootEl.querySelector('#pop-speed-status');
+    const popSubThink = rootEl.querySelector('#pop-sub-think');
+    const popSubOutput = rootEl.querySelector('#pop-sub-output');
+    const popSubPeak = rootEl.querySelector('#pop-sub-peak');
+
+    if (speedBadge) {
+      speedBadge.innerText = '⚡ 0 t/s';
+      speedBadge.className = 'agy-speed-badge';
+      speedBadge.title = i18n.speedBadgeTitleIdle;
+    }
+    if (popLive) {
+      popLive.innerText = '0 t/s';
+      popLive.classList.remove('agy-live-active');
+    }
+    if (popAvg) popAvg.innerText = '--';
+    if (popDur) popDur.innerText = '--';
+    if (popTok) popTok.innerText = '--';
+    if (popStatus) {
+      popStatus.innerText = i18n.statusIdle;
+      popStatus.className = 'agy-pop-speed-status';
+    }
+    if (popSubThink) popSubThink.innerText = '0';
+    if (popSubOutput) popSubOutput.innerText = '0';
+    if (popSubPeak) popSubPeak.innerText = '--';
+  }
+
+  function renderSpeedUI(turnData, active = false) {
+    if (!rootEl) return;
+    const speedBadge = rootEl.querySelector('#agy-speed-badge');
+    const popLive = rootEl.querySelector('#pop-speed-live');
+    const popAvg = rootEl.querySelector('#pop-speed-avg');
+    const popDur = rootEl.querySelector('#pop-speed-dur');
+    const popTok = rootEl.querySelector('#pop-speed-tokens');
+    const popStatus = rootEl.querySelector('#pop-speed-status');
+    const popSubThink = rootEl.querySelector('#pop-sub-think');
+    const popSubOutput = rootEl.querySelector('#pop-sub-output');
+    const popSubPeak = rootEl.querySelector('#pop-sub-peak');
+
+    if (active) {
+      const liveRate = (turnData && turnData.liveRate > 0) ? turnData.liveRate : 0;
+      const liveStr = liveRate > 0 ? liveRate.toFixed(1) : '0.0';
+      const avgRate = (turnData && turnData.avgRate > 0) ? turnData.avgRate : liveRate;
+      const avgStr = avgRate > 0 ? avgRate.toFixed(1) : liveStr;
+      const durStr = (turnData ? (turnData.durationSeconds || 0) : 0).toFixed(1) + (isZh ? ' 秒' : 's');
+      const tokStr = (turnData ? (turnData.tokens || 0) : 0).toLocaleString() + ' tok';
+      const peakStr = (turnData && turnData.peakRate > 0) ? turnData.peakRate.toFixed(1) + ' t/s' : '--';
+
+      if (speedBadge) {
+        speedBadge.innerText = '⚡ ' + liveStr + ' t/s';
+        speedBadge.className = 'agy-speed-badge agy-speed-active';
+        speedBadge.title = isZh
+          ? `⚡ 实时速率: ${liveStr} tokens/s (当前均速: ${avgStr} t/s · 耗时 ${durStr})`
+          : `⚡ Live Speed: ${liveStr} tokens/s (Avg: ${avgStr} t/s · ${durStr})`;
+      }
+      if (popLive) {
+        popLive.innerText = liveStr + ' t/s';
+        popLive.classList.add('agy-live-active');
+      }
+      if (popAvg) popAvg.innerText = avgStr + ' t/s';
+      if (popDur) popDur.innerText = durStr;
+      if (popTok) popTok.innerText = tokStr;
+      if (popStatus) {
+        popStatus.innerText = i18n.statusActive;
+        popStatus.className = 'agy-pop-speed-status status-active';
+      }
+      if (popSubThink) popSubThink.innerText = (turnData && turnData.thinkingTokens) ? turnData.thinkingTokens.toLocaleString() : '0';
+      if (popSubOutput) popSubOutput.innerText = (turnData && turnData.outputTokens) ? turnData.outputTokens.toLocaleString() : (turnData ? (turnData.tokens || 0).toLocaleString() : '0');
+      if (popSubPeak) popSubPeak.innerText = peakStr;
+    } else {
+      // 状态栏：空闲时严格展示当前实时速率 0 t/s
+      if (speedBadge) {
+        speedBadge.innerText = '⚡ 0 t/s';
+        speedBadge.className = 'agy-speed-badge';
+      }
+      if (popLive) {
+        popLive.innerText = '0 t/s';
+        popLive.classList.remove('agy-live-active');
+      }
+
+      if (turnData && turnData.tokens > 0) {
+        const avg = turnData.rate > 0 ? turnData.rate.toFixed(1) : '--';
+        const dur = (turnData.durationSeconds || 0) + (isZh ? ' 秒' : 's');
+        const tok = (turnData.tokens || 0).toLocaleString() + ' tok';
+        const peak = turnData.peakRate ? turnData.peakRate.toFixed(1) + ' t/s' : '--';
+
+        if (speedBadge) {
+          speedBadge.title = isZh
+            ? `实时速率: 0 t/s (待机) | 上轮平均: ${avg} t/s (耗时 ${dur} · ${tok})`
+            : `Live: 0 t/s (Idle) | Last Avg: ${avg} t/s (${dur} · ${tok})`;
+        }
+        if (popAvg) popAvg.innerText = avg + (avg !== '--' ? ' t/s' : '');
+        if (popDur) popDur.innerText = dur;
+        if (popTok) popTok.innerText = tok;
+        if (popStatus) {
+          popStatus.innerText = i18n.statusIdle;
+          popStatus.className = 'agy-pop-speed-status';
+        }
+        if (popSubThink) popSubThink.innerText = (turnData.thinkingTokens || 0).toLocaleString();
+        if (popSubOutput) popSubOutput.innerText = (turnData.outputTokens || 0).toLocaleString();
+        if (popSubPeak) popSubPeak.innerText = peak;
+      } else {
+        resetSpeedUI();
+      }
+    }
+  }
+
+  function handleConversationSwitch(newCid) {
+    currentConvoId = newCid;
+    isGenerating = false;
+    streamStartTime = 0;
+    streamStartTokens = 0;
+    lastSampleTime = 0;
+    lastSampleTokens = 0;
+    activeStreamingDuration = 0;
+    lastTokenIncrementTime = 0;
+    liveEmaRate = 0;
+    streamPeakRate = 0;
+    localLastTurn = getStoredTurn(newCid);
+    cachedStats = null;
+    if (localLastTurn) {
+      renderSpeedUI(localLastTurn, false);
+    } else {
+      resetSpeedUI();
+    }
+    updateStats(true);
+  }
+
+  function tickSpeedTracker() {
+    if (!rootEl) return;
+
+    // 严防跨会话串门：实时检测会话 ID
+    const activeConvoId = getActiveConversationId();
+    if (activeConvoId !== currentConvoId) {
+      handleConversationSwitch(activeConvoId);
+      return;
+    }
+
+    const currentlyGenerating = detectIsGenerating();
+
+    if (currentlyGenerating) {
+      const now = performance.now();
+      const currentTokens = getStreamingTokens();
+
+      if (!isGenerating) {
+        // 进入实时流式生成态
+        isGenerating = true;
+        streamStartTime = now;
+        streamStartTokens = currentTokens;
+        lastSampleTime = now;
+        lastSampleTokens = currentTokens;
+        activeStreamingDuration = 0;
+        lastTokenIncrementTime = 0;
+        liveEmaRate = 0;
+        streamPeakRate = 0;
+      } else {
+        const dt = (now - lastSampleTime) / 1000;
+        if (dt >= 0.25) {
+          const dTok = currentTokens - lastSampleTokens;
+          if (dTok > 0 && dt > 0) {
+            const instRate = dTok / dt;
+            if (liveEmaRate === 0) {
+              liveEmaRate = instRate;
+            } else {
+              liveEmaRate = 0.35 * instRate + 0.65 * liveEmaRate;
+            }
+            if (instRate > streamPeakRate) {
+              streamPeakRate = instRate;
+            }
+            // 关键优化：仅当模型正在实际产生 Token 吐字时，才计入纯推理生成时间
+            // 自动剔除外部工具调用、终端执行与后台网络长等待时间！
+            activeStreamingDuration += dt;
+            lastTokenIncrementTime = now;
+          } else if (lastTokenIncrementTime > 0 && (now - lastTokenIncrementTime) < 800) {
+            // 字符微卡顿平滑缓冲（800ms 以内允许缓冲累计，超过 800ms 视作工具调用或长等待暂停）
+            activeStreamingDuration += dt;
+          }
+          lastSampleTokens = currentTokens;
+          lastSampleTime = now;
+        }
+      }
+
+      const turnTokens = Math.max(0, currentTokens - streamStartTokens);
+      // 纯模型生成耗时
+      const effectiveDuration = Math.max(0.3, activeStreamingDuration > 0 ? activeStreamingDuration : (now - streamStartTime) / 1000);
+      const displayLiveRate = liveEmaRate > 0 ? liveEmaRate : (turnTokens > 0 ? (turnTokens / effectiveDuration) : 0);
+      const displayAvgRate = (turnTokens > 0 && effectiveDuration > 0) ? (turnTokens / effectiveDuration) : displayLiveRate;
+      if (displayLiveRate > streamPeakRate) {
+        streamPeakRate = displayLiveRate;
+      }
+
+      renderSpeedUI({
+        liveRate: displayLiveRate,
+        avgRate: displayAvgRate,
+        durationSeconds: effectiveDuration,
+        tokens: turnTokens,
+        thinkingTokens: 0,
+        outputTokens: turnTokens,
+        peakRate: streamPeakRate
+      }, true);
+
+    } else {
+      // 空闲态
+      if (isGenerating) {
+        // 刚结束生成，收尾本轮数据
+        isGenerating = false;
+        const finalTokens = Math.max(0, getStreamingTokens() - streamStartTokens);
+        if (finalTokens > 0) {
+          const finalDuration = Math.max(0.4, activeStreamingDuration > 0 ? activeStreamingDuration : (performance.now() - streamStartTime) / 1000);
+          const avgRate = (finalDuration > 0.2 && finalTokens > 0) ? (finalTokens / finalDuration) : liveEmaRate;
+          localLastTurn = {
+            convoId: currentConvoId,
+            rate: Math.round(avgRate * 10) / 10,
+            durationSeconds: Math.round(finalDuration * 10) / 10,
+            tokens: finalTokens,
+            peakRate: Math.round(streamPeakRate * 10) / 10,
+            thinkingTokens: 0,
+            outputTokens: finalTokens
+          };
+          try {
+            sessionStorage.setItem('agy_turn_' + currentConvoId, JSON.stringify(localLastTurn));
+          } catch (e) {}
+        }
+        setTimeout(() => updateStats(true), 1200);
+      }
+
+      // 仅展示严格匹配当前会话 ID 且有实质生成量（tokens > 0）的数据
+      let turnData = null;
+      if (localLastTurn && localLastTurn.convoId === currentConvoId && localLastTurn.tokens > 0) {
+        turnData = localLastTurn;
+      } else {
+        const stored = getStoredTurn(currentConvoId);
+        if (stored && stored.tokens > 0) {
+          localLastTurn = stored;
+          turnData = stored;
+        } else if (cachedStats && cachedStats.convoId === currentConvoId && cachedStats.lastTurn && cachedStats.lastTurn.tokens > 0) {
+          turnData = cachedStats.lastTurn;
+        }
+      }
+
+      renderSpeedUI(turnData, false);
+    }
+  }
+
   async function updateStats(force) {
     if (!rootEl) return;
 
     // 嗅探当前选中的会话 ID
     const activeConvoId = getActiveConversationId();
-    currentConvoId = activeConvoId;
+    if (activeConvoId !== currentConvoId) {
+      handleConversationSwitch(activeConvoId);
+      return;
+    }
 
+    const reqConvoId = currentConvoId;
     let stats = null;
 
-    if (!currentConvoId || currentConvoId === '_new') {
-      // 当前是新建对话或尚未打开具体项目会话，严格置为 0%
+    if (!reqConvoId || reqConvoId === '_new') {
       stats = {
         convoId: null,
         totalTokens: 0,
@@ -1028,12 +1514,19 @@
         userTokens: 0,
         systemPromptTokens: 0,
         artifactsTokens: 0,
-        stepCount: 0
+        stepCount: 0,
+        lastTurn: {
+          tokens: 0,
+          thinkingTokens: 0,
+          outputTokens: 0,
+          durationSeconds: 0,
+          rate: 0
+        }
       };
     } else {
       // 1. 本地微服务极速读取，传入当前会话 ID
       try {
-        const url = 'http://127.0.0.1:49152/stats?convoId=' + encodeURIComponent(currentConvoId);
+        const url = 'http://127.0.0.1:49152/stats?convoId=' + encodeURIComponent(reqConvoId);
         const res = await fetch(url, { signal: AbortSignal.timeout(600) });
         if (res.ok) {
           stats = await res.json();
@@ -1043,9 +1536,14 @@
       // 2. 备选：Electron 主进程 IPC 读取
       if (!stats) {
         try {
-          stats = await electron_1.ipcRenderer.invoke('context:get-stats', currentConvoId);
+          stats = await electron_1.ipcRenderer.invoke('context:get-stats', reqConvoId);
         } catch (e) {}
       }
+    }
+
+    // 关键防串门校验：如果异步请求返回期间，用户已切换到了其他任务面板，直接丢弃过时数据
+    if (reqConvoId !== currentConvoId) {
+      return;
     }
 
     if (!stats) {
@@ -1057,7 +1555,15 @@
         modelThinkingTokens: 0,
         userTokens: 0,
         systemPromptTokens: 0,
-        artifactsTokens: 0
+        artifactsTokens: 0,
+        stepCount: 0,
+        lastTurn: {
+          tokens: 0,
+          thinkingTokens: 0,
+          outputTokens: 0,
+          durationSeconds: 0,
+          rate: 0
+        }
       };
     }
 
@@ -1165,6 +1671,11 @@
         healthBadge.style.background = 'rgba(239, 68, 68, 0.15)';
       }
     }
+
+    cachedStats = stats;
+    if (!isGenerating) {
+      tickSpeedTracker();
+    }
   }
 
   function init() {
@@ -1191,6 +1702,9 @@
       window.addEventListener('pointerdown', schedulePositionWidget, true);
       window.addEventListener('pointerup', schedulePositionWidget, true);
 
+      // 250ms 高频生成速率采样与平滑跳动
+      setInterval(tickSpeedTracker, 250);
+
       // 1.5s 极速轮询与动态位置纠正
       setInterval(() => {
         schedulePositionWidget();
@@ -1205,7 +1719,9 @@
           positionWidget();
           const newCid = getActiveConversationId();
           if (newCid !== currentConvoId) {
-            updateStats();
+            handleConversationSwitch(newCid);
+          } else {
+            tickSpeedTracker();
           }
         });
       });
